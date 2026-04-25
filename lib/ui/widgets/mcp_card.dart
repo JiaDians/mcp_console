@@ -6,6 +6,7 @@ import '../../models/mcp_type.dart';
 import '../../models/ai_client.dart';
 import '../../providers/version_check_provider.dart';
 import '../screens/mcp_detail_screen.dart';
+import '../widgets/update_dialog.dart';
 import 'update_indicator.dart';
 
 class McpCard extends ConsumerWidget {
@@ -15,7 +16,6 @@ class McpCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Disabled servers skip version check entirely
     final versionAsync = server.disabled
         ? null
         : ref.watch(versionCheckProvider(server));
@@ -28,10 +28,7 @@ class McpCard extends ConsumerWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ProviderScope(
-                overrides: [],
-                child: McpDetailScreen(server: server),
-              ),
+              builder: (_) => McpDetailScreen(server: server),
             ),
           );
         },
@@ -61,12 +58,22 @@ class McpCard extends ConsumerWidget {
                             _DisabledBadge()
                           else if (versionAsync != null)
                             versionAsync.when(
-                              data: (result) => UpdateIndicator(
-                                snapshot: AsyncSnapshot.withData(
-                                  ConnectionState.done,
-                                  result,
-                                ),
-                              ),
+                              data: (result) {
+                                // Show quick-update button when update available
+                                if (result.updateAvailable &&
+                                    result.latestVersion != null) {
+                                  return _QuickUpdateButton(
+                                    server: server,
+                                    latestVersion: result.latestVersion!,
+                                  );
+                                }
+                                return UpdateIndicator(
+                                  snapshot: AsyncSnapshot.withData(
+                                    ConnectionState.done,
+                                    result,
+                                  ),
+                                );
+                              },
                               loading: () => UpdateIndicator(
                                 snapshot: const AsyncSnapshot.waiting(),
                               ),
@@ -129,6 +136,38 @@ class McpCard extends ConsumerWidget {
     }).toList();
   }
 }
+
+// ─── Quick update button ─────────────────────────────────────────────────────
+
+class _QuickUpdateButton extends ConsumerWidget {
+  final McpServer server;
+  final String latestVersion;
+  const _QuickUpdateButton({required this.server, required this.latestVersion});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Tooltip(
+      message: '可更新至 $latestVersion，點擊立即更新',
+      child: TextButton.icon(
+        style: TextButton.styleFrom(
+          backgroundColor: Theme.of(context).colorScheme.errorContainer,
+          foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: () => showUpdateDialog(context, ref, server, latestVersion),
+        icon: const Icon(Icons.system_update_alt, size: 16),
+        label: Text(
+          '↑ $latestVersion',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+}
+
 
 class _DisabledBadge extends StatelessWidget {
   @override

@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  static const _seedColor = Color(0xFF6750A4);
-
   // Desktop-optimised text theme — bumps all sizes up ~1–2sp
   static const _textTheme = TextTheme(
     displayLarge:  TextStyle(fontSize: 57),
@@ -24,10 +22,10 @@ class AppTheme {
     labelSmall:  TextStyle(fontSize: 12),
   );
 
-  static ThemeData get light => ThemeData(
+  static ThemeData light(Color seedColor) => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: _seedColor,
+          seedColor: seedColor,
           brightness: Brightness.light,
         ),
         textTheme: _textTheme,
@@ -43,10 +41,10 @@ class AppTheme {
         ),
       );
 
-  static ThemeData get dark => ThemeData(
+  static ThemeData dark(Color seedColor) => ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: _seedColor,
+          seedColor: seedColor,
           brightness: Brightness.dark,
         ),
         textTheme: _textTheme,

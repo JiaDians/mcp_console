@@ -177,6 +177,85 @@ class ConfigParserService {
     await file.writeAsString(encoder.convert(json));
   }
 
+  /// Updates all fields of a specific MCP server in a config file.
+  /// Handles renaming (oldName → server.name) and preserves unknown fields.
+  Future<void> updateServerConfig({
+    required String configPath,
+    required String oldName,
+    required McpServer server,
+  }) async {
+    final file = File(configPath);
+    if (!await file.exists()) return;
+
+    final content = await file.readAsString();
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(content);
+    } catch (_) {
+      return;
+    }
+    if (decoded is! Map<String, dynamic>) return;
+    final json = decoded;
+
+    final servers = json['mcpServers'] as Map<String, dynamic>?;
+    if (servers == null || !servers.containsKey(oldName)) return;
+
+    // Preserve fields we don't know about (e.g. custom client-specific keys)
+    final existing =
+        Map<String, dynamic>.from(servers[oldName] as Map<String, dynamic>);
+
+    if (server.type == McpType.sse) {
+      existing.remove('command');
+      existing.remove('args');
+      existing['type'] = 'sse';
+      if (server.url != null && server.url!.isNotEmpty) {
+        existing['url'] = server.url;
+      } else {
+        existing.remove('url');
+      }
+      if (server.headers.isNotEmpty) {
+        existing['headers'] = server.headers;
+      } else {
+        existing.remove('headers');
+      }
+    } else {
+      existing.remove('url');
+      existing.remove('type');
+      existing['command'] = server.command;
+      if (server.args.isNotEmpty) {
+        existing['args'] = server.args;
+      } else {
+        existing.remove('args');
+      }
+      if (server.env.isNotEmpty) {
+        existing['env'] = server.env;
+      } else {
+        existing.remove('env');
+      }
+    }
+
+    if (server.timeout != null) {
+      existing['timeout'] = server.timeout;
+    } else {
+      existing.remove('timeout');
+    }
+
+    if (server.alwaysAllow.isNotEmpty) {
+      existing['alwaysAllow'] = server.alwaysAllow;
+    } else {
+      existing.remove('alwaysAllow');
+      existing.remove('autoApprove');
+    }
+
+    // Handle rename
+    if (oldName != server.name) servers.remove(oldName);
+    servers[server.name] = existing;
+    json['mcpServers'] = servers;
+
+    const encoder = JsonEncoder.withIndent('  ');
+    await file.writeAsString(encoder.convert(json));
+  }
+
   /// Removes an MCP server entry from a config file.
   Future<void> removeServerFromConfig({
     required String configPath,
