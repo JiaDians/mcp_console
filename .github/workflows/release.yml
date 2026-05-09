@@ -88,37 +88,64 @@ jobs:
           Compress-Archive -Path "$outDir\*" -DestinationPath $zipName
           echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
 
+      - name: Extract release notes
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart("v")
+          $changelog = "CHANGELOG.md"
+          $notesPath = "release_notes.md"
+
+          if (!(Test-Path $changelog)) {
+            throw "CHANGELOG.md not found. Add a changelog entry before pushing $tag."
+          }
+
+          $lines = Get-Content $changelog -Encoding UTF8
+          $patterns = @(
+            "^##\s+\[$([regex]::Escape($version))\]",
+            "^##\s+\[$([regex]::Escape($tag))\]",
+            "^##\s+MCP Console\s+$([regex]::Escape($tag))\b",
+            "^##\s+$([regex]::Escape($tag))\b",
+            "^##\s+$([regex]::Escape($version))\b"
+          )
+
+          $start = -1
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            foreach ($pattern in $patterns) {
+              if ($lines[$i] -match $pattern) {
+                $start = $i
+                break
+              }
+            }
+            if ($start -ge 0) { break }
+          }
+
+          if ($start -lt 0) {
+            throw "No changelog section found for $tag. Add '## [$version] - YYYY-MM-DD' to CHANGELOG.md."
+          }
+
+          $end = $lines.Count
+          for ($i = $start + 1; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match "^##\s+") {
+              $end = $i
+              break
+            }
+          }
+
+          $section = $lines[$start..($end - 1)]
+          $contentLines = $section | Where-Object { $_.Trim().Length -gt 0 }
+          if ($contentLines.Count -le 1) {
+            throw "Changelog section for $tag is empty."
+          }
+
+          $section | Set-Content $notesPath -Encoding UTF8
+          echo "RELEASE_NOTES=$notesPath" >> $env:GITHUB_ENV
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: "MCP Console ${{ github.ref_name }}"
-          body: |
-            ## MCP Console ${{ github.ref_name }}
-
-            ### 📥 下載選項
-
-            | 檔案 | 說明 |
-            |------|------|
-            | `MCP_Console_*_Setup.exe` | **建議** — 安裝程式，會建立桌面捷徑與開始功能表 |
-            | `MCP_Console_*_windows_portable.zip` | 免安裝攜帶版，解壓縮後直接執行 |
-
-            ### ⚠️ Windows SmartScreen 警告說明
-
-            由於此應用程式尚未取得程式碼簽名憑證，Windows 可能顯示「Windows 已保護您的電腦」藍色警告畫面。
-
-            **這是開源軟體的常見情況，並非惡意程式。** 跳過方式：
-
-            1. 點擊「**更多資訊**」（More info）
-            2. 點擊「**仍要執行**」（Run anyway）
-
-            您可在 [GitHub 原始碼](https://github.com/${{ github.repository }}) 自行審閱所有程式碼。
-
-            ### 💻 系統需求
-            - Windows 10 / 11 (x64)
-            - 無需安裝其他執行環境
-
-            ### 📝 變更內容
-            請見 [Commits](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})
+          body_path: ${{ env.RELEASE_NOTES }}
           files: |
             ${{ env.INSTALLER_NAME }}
             ${{ env.ZIP_NAME }}
