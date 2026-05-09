@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/design_tokens.dart';
 import '../../providers/ai_clients_provider.dart';
 import '../../providers/mcp_list_provider.dart';
 
@@ -19,34 +20,64 @@ class ClientFilterChips extends ConsumerWidget {
         final enabledClients = clients.where((c) => c.isEnabled).toList();
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
+          padding: EdgeInsets.zero,
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
             children: [
-              FilterChip(
-                label: const Text('全部'),
+              _FilterPill(
+                icon: Icons.all_inclusive,
+                label: '全部',
                 selected: selectedFilter == null,
-                onSelected: (_) =>
+                onSelected: () =>
                     ref.read(clientFilterProvider.notifier).state = null,
               ),
-              const SizedBox(width: 8),
-              ...enabledClients.map((client) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      avatar: Icon(client.type.icon, size: 16),
-                      label: Text(client.name),
-                      selected: selectedFilter == client.type,
-                      onSelected: (_) {
-                        final notifier =
-                            ref.read(clientFilterProvider.notifier);
-                        notifier.state =
-                            selectedFilter == client.type ? null : client.type;
-                      },
-                    ),
-                  )),
+              ...enabledClients.map(
+                (client) => _FilterPill(
+                  icon: client.type.icon,
+                  label: client.name,
+                  selected: selectedFilter == client.type,
+                  onSelected: () {
+                    final notifier = ref.read(clientFilterProvider.notifier);
+                    notifier.state = selectedFilter == client.type
+                        ? null
+                        : client.type;
+                  },
+                ),
+              ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  const _FilterPill({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: ChoiceChip(
+        avatar: Icon(icon, size: 16),
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        onSelected: (_) => onSelected(),
+      ),
     );
   }
 }

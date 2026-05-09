@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/design_tokens.dart';
 import '../../models/mcp_server.dart';
 import '../../models/version_check_result.dart';
 import '../../providers/ai_clients_provider.dart';
@@ -97,7 +98,7 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _log.add('❌ $e');
+          _log.add('[error] $e');
           _running = false;
           _success = false;
         });
@@ -131,47 +132,65 @@ class _UpdateDialogState extends ConsumerState<UpdateDialog> {
     final title = _running
         ? '正在更新 ${widget.server.name}…'
         : _success
-            ? '更新完成'
-            : '更新失敗';
+        ? '更新完成'
+        : '更新失敗';
 
     return AlertDialog(
-      title: Text(title),
+      title: Row(
+        children: [
+          Icon(
+            _running
+                ? Icons.sync
+                : _success
+                ? Icons.check_circle_outline
+                : Icons.error_outline,
+            color: _running
+                ? cs.primary
+                : _success
+                ? AppSemanticColors.success
+                : cs.error,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(title)),
+        ],
+      ),
       content: SizedBox(
-        width: 500,
+        width: 560,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              '更新過程會即時顯示命令輸出，完成後會重新驗證版本。',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppSpacing.lg),
             SizedBox(
               height: 240,
               child: Container(
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
+                  color: cs.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  border: Border.all(color: cs.outlineVariant),
                 ),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 child: ListView.builder(
                   controller: _scrollController,
                   itemCount: _log.length,
                   itemBuilder: (_, i) => Text(
                     _log[i],
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ),
             ),
             if (_success) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               if (_verifying)
-                Row(children: [
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                  Text('驗證已安裝版本…',
-                      style: TextStyle(color: cs.onSurfaceVariant)),
-                ])
+                const _InlineProgress(text: '驗證已安裝版本…')
               else if (_verifyResult != null)
                 _VerifyBanner(result: _verifyResult!),
             ],
@@ -205,29 +224,85 @@ class _VerifyBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     if (result.hasError) {
-      return Row(children: [
-        Icon(Icons.warning_amber_rounded, size: 18, color: cs.onSurfaceVariant),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text('無法驗證：${result.errorMessage}',
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
-        ),
-      ]);
+      return _StatusBanner(
+        icon: Icons.warning_amber_rounded,
+        color: cs.onSurfaceVariant,
+        text: '無法驗證：${result.errorMessage}',
+      );
     }
     if (result.updateAvailable) {
-      return Row(children: [
-        Icon(Icons.error_outline, size: 18, color: cs.error),
-        const SizedBox(width: 6),
-        Text('仍未更新 — 最新版為 v${result.latestVersion}',
-            style: TextStyle(color: cs.error, fontSize: 13)),
-      ]);
+      return _StatusBanner(
+        icon: Icons.error_outline,
+        color: cs.error,
+        text: '仍未更新 — 最新版為 v${result.latestVersion}',
+      );
     }
-    return Row(children: [
-      const Icon(Icons.check_circle_outline, size: 18, color: Colors.green),
-      const SizedBox(width: 6),
-      Text('✓ v${result.latestVersion} — 已是最新版',
-          style: const TextStyle(
-              color: Colors.green, fontSize: 13, fontWeight: FontWeight.w600)),
-    ]);
+    return _StatusBanner(
+      icon: Icons.check_circle_outline,
+      color: AppSemanticColors.success,
+      text: 'v${result.latestVersion} — 已是最新版',
+    );
+  }
+}
+
+class _InlineProgress extends StatelessWidget {
+  final String text;
+
+  const _InlineProgress({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          text,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusBanner extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  const _StatusBanner({
+    required this.icon,
+    required this.color,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: color, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

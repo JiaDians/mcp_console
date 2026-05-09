@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/design_tokens.dart';
 import '../../models/mcp_server.dart';
 import '../../models/mcp_type.dart';
 import '../../models/ai_client.dart';
@@ -45,151 +46,19 @@ class McpDetailScreen extends ConsumerWidget {
             onPressed: () => _showEditScreen(context, ref),
           ),
           IconButton(
-            icon: Icon(Icons.delete_outline,
-                color: Theme.of(context).colorScheme.error),
+            icon: Icon(
+              Icons.delete_outline,
+              color: Theme.of(context).colorScheme.error,
+            ),
             tooltip: '移除 MCP',
             onPressed: () => _showRemoveDialog(context, ref),
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // ── Disabled banner ──────────────────────────────────────────────
-          if (server.disabled)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.block, size: 18,
-                        color: Theme.of(context).colorScheme.onErrorContainer),
-                    const SizedBox(width: 8),
-                    Text('此 MCP 已停用（disabled: true）',
-                        style: TextStyle(
-                            color: Theme.of(context).colorScheme.onErrorContainer,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ),
-
-          // ── Type ────────────────────────────────────────────────────────
-          _Section(
-            title: '類型',
-            child: _Badge(server.type.label),
-          ),
-
-          // ── Transport ────────────────────────────────────────────────────
-          if (server.url != null)
-            _Section(
-              title: '端點 URL',
-              child: _MonoText(server.url!),
-            )
-          else
-            _Section(
-              title: '指令',
-              child: _MonoText('${server.command} ${server.args.join(' ')}'.trim()),
-            ),
-
-          // ── Headers (HTTP/SSE only) ───────────────────────────────────────
-          if (server.headers.isNotEmpty)
-            _Section(
-              title: 'HTTP 標頭',
-              child: _MaskedKeyValueList(entries: server.headers),
-            ),
-
-          // ── Env vars ─────────────────────────────────────────────────────
-          if (server.env.isNotEmpty)
-            _Section(
-              title: '環境變數',
-              child: _MaskedKeyValueList(entries: server.env),
-            ),
-
-          // ── Runtime options ───────────────────────────────────────────────
-          if (server.timeout != null || server.alwaysAllow.isNotEmpty)
-            _Section(
-              title: '選項',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (server.timeout != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.timer_outlined, size: 16),
-                          const SizedBox(width: 6),
-                          Text('逾時：${server.timeout} ms'),
-                        ],
-                      ),
-                    ),
-                  if (server.alwaysAllow.isNotEmpty) ...[
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          Icon(Icons.check_circle_outline, size: 16),
-                          SizedBox(width: 6),
-                          Text('自動核准工具：'),
-                        ],
-                      ),
-                    ),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: server.alwaysAllow.map((tool) {
-                        return Chip(
-                          label: Text(tool),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-          // ── Clients ────────────────────────────────────────────────────
-          _Section(
-            title: '設定於',
-            child: Wrap(
-              spacing: 8,
-              children: server.clients.map((c) {
-                return Chip(
-                  avatar: Icon(c.icon, size: 16),
-                  label: Text(c.displayName),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                );
-              }).toList(),
-            ),
-          ),
-
-          // ── Version / Connectivity ────────────────────────────────────────
-          _Section(
-            title: server.type == McpType.sse ? '連線狀態' : '版本',
-            child: server.disabled
-                ? const Text('已停用，略過檢查',
-                    style: TextStyle(color: Colors.grey))
-                : versionAsync!.when(
-                    loading: () => const LinearProgressIndicator(),
-                    error: (e, _) => Text('Error: $e',
-                        style: const TextStyle(color: Colors.red)),
-                    data: (result) => _VersionSection(
-                      server: server,
-                      result: result,
-                      onUpdate: () =>
-                          _showUpdateDialog(context, ref, result.latestVersion!),
-                    ),
-                  ),
-          ),
-        ],
+      body: _DetailLayout(
+        server: server,
+        versionAsync: versionAsync,
+        onUpdate: (version) => _showUpdateDialog(context, ref, version),
       ),
     );
   }
@@ -197,9 +66,7 @@ class McpDetailScreen extends ConsumerWidget {
   void _showEditScreen(BuildContext context, WidgetRef ref) {
     Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-        builder: (_) => McpEditScreen(server: server),
-      ),
+      MaterialPageRoute(builder: (_) => McpEditScreen(server: server)),
     ).then((saved) {
       if (saved == true && context.mounted) {
         // Detail screen data is stale after edit — go back to home
@@ -221,8 +88,246 @@ class McpDetailScreen extends ConsumerWidget {
   }
 
   void _showUpdateDialog(
-      BuildContext context, WidgetRef ref, String newVersion) {
+    BuildContext context,
+    WidgetRef ref,
+    String newVersion,
+  ) {
     showUpdateDialog(context, ref, server, newVersion);
+  }
+}
+
+class _DetailLayout extends StatelessWidget {
+  final McpServer server;
+  final AsyncValue<dynamic>? versionAsync;
+  final void Function(String version) onUpdate;
+
+  const _DetailLayout({
+    required this.server,
+    required this.versionAsync,
+    required this.onUpdate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= AppBreakpoints.wide;
+        final overview = _buildOverview(context);
+        final transport = _buildTransport(context);
+        final secrets = _buildSecrets();
+        final side = _buildSide(context);
+
+        if (isWide) {
+          return ListView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            children: [
+              if (server.disabled) _DisabledBanner(server: server),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      children: [
+                        overview,
+                        const SizedBox(height: AppSpacing.lg),
+                        transport,
+                        if (secrets != null) ...[
+                          const SizedBox(height: AppSpacing.lg),
+                          secrets,
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(flex: 2, child: side),
+                ],
+              ),
+            ],
+          );
+        }
+
+        return ListView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          children: [
+            if (server.disabled) _DisabledBanner(server: server),
+            overview,
+            const SizedBox(height: AppSpacing.lg),
+            transport,
+            if (secrets != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              secrets,
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            side,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildOverview(BuildContext context) {
+    final command = server.url != null
+        ? server.url!
+        : '${server.command} ${server.args.join(' ')}'.trim();
+    return _Section(
+      title: '概覽',
+      icon: Icons.dashboard_customize_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _Badge(server.type.label),
+              if (server.currentVersion != null)
+                _Badge('v${server.currentVersion}'),
+              if (server.disabled) _Badge('停用'),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text('啟動方式', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: AppSpacing.sm),
+          _MonoText(command),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransport(BuildContext context) {
+    return _Section(
+      title: server.url != null ? '傳輸端點' : '指令參數',
+      icon: server.url != null ? Icons.http_outlined : Icons.terminal_outlined,
+      child: server.url != null
+          ? _MonoText(server.url!)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _InfoRow(
+                  icon: Icons.play_arrow_outlined,
+                  label: '指令',
+                  value: server.command.isEmpty ? '(empty)' : server.command,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text('參數', style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: AppSpacing.sm),
+                server.args.isEmpty
+                    ? Text(
+                        '未設定參數',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    : Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: server.args.map(_Badge.new).toList(),
+                      ),
+              ],
+            ),
+    );
+  }
+
+  Widget? _buildSecrets() {
+    if (server.headers.isEmpty && server.env.isEmpty) return null;
+    return _Section(
+      title: '敏感資訊',
+      icon: Icons.lock_outline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (server.headers.isNotEmpty) ...[
+            const _SubsectionLabel('HTTP 標頭'),
+            _MaskedKeyValueList(entries: server.headers),
+          ],
+          if (server.headers.isNotEmpty && server.env.isNotEmpty)
+            const Divider(height: AppSpacing.xl),
+          if (server.env.isNotEmpty) ...[
+            const _SubsectionLabel('環境變數'),
+            _MaskedKeyValueList(entries: server.env),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSide(BuildContext context) {
+    return Column(
+      children: [
+        _Section(
+          title: server.type == McpType.sse ? '連線狀態' : '版本狀態',
+          icon: server.type == McpType.sse
+              ? Icons.sensors_outlined
+              : Icons.system_update_alt,
+          child: server.disabled
+              ? Text(
+                  '已停用，略過檢查',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                )
+              : versionAsync!.when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (e, _) => Text(
+                    '檢查失敗：$e',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  data: (result) => _VersionSection(
+                    server: server,
+                    result: result,
+                    onUpdate: () => onUpdate(result.latestVersion!),
+                  ),
+                ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _Section(
+          title: '設定於',
+          icon: Icons.desktop_windows_outlined,
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: server.clients.map((c) {
+              return Chip(
+                avatar: Icon(c.icon, size: 16),
+                label: Text(c.displayName),
+              );
+            }).toList(),
+          ),
+        ),
+        if (server.timeout != null || server.alwaysAllow.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _Section(
+            title: '執行選項',
+            icon: Icons.tune_outlined,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (server.timeout != null)
+                  _InfoRow(
+                    icon: Icons.timer_outlined,
+                    label: '逾時',
+                    value: '${server.timeout} ms',
+                  ),
+                if (server.timeout != null && server.alwaysAllow.isNotEmpty)
+                  const SizedBox(height: AppSpacing.md),
+                if (server.alwaysAllow.isNotEmpty) ...[
+                  Text('自動核准工具', style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: server.alwaysAllow.map(_Badge.new).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 
@@ -242,59 +347,96 @@ class _VersionSection extends ConsumerWidget {
     // ── HTTP/SSE connectivity result ─────────────────────────────────────────
     if (result.isConnectivity) {
       final online = result.isOnline == true;
-      return Row(
-        children: [
-          Icon(
-            online ? Icons.wifi : Icons.wifi_off,
-            size: 18,
-            color: online ? Colors.green : Theme.of(context).colorScheme.error,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            online ? '伺服器在線' : '伺服器離線或無法連線',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: online ? Colors.green : Theme.of(context).colorScheme.error,
-            ),
-          ),
-        ],
+      return _StatusBanner(
+        icon: online ? Icons.wifi : Icons.wifi_off,
+        text: online ? '伺服器在線' : '伺服器離線或無法連線',
+        color: online
+            ? AppSemanticColors.success
+            : Theme.of(context).colorScheme.error,
       );
     }
 
-    // ── Version check error ──────────────────────────────────────────────────
     if (result.hasError) {
-      return Text('無法檢查: ${result.errorMessage}',
-          style: const TextStyle(color: Colors.grey));
+      return _StatusBanner(
+        icon: Icons.warning_amber_rounded,
+        text: '無法檢查：${result.errorMessage}',
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      );
     }
 
-    // ── Normal version check ──────────────────────────────────────────────────
+    final latestColor = result.updateAvailable
+        ? Theme.of(context).colorScheme.error
+        : AppSemanticColors.success;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text('當前: ${server.currentVersion ?? "未追蹤"}'),
-            const Spacer(),
-            Text(
-              '最新: ${result.latestVersion ?? "未知"}',
-              style: TextStyle(
-                color: result.updateAvailable
-                    ? Theme.of(context).colorScheme.error
-                    : Colors.green,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+        _InfoRow(
+          icon: Icons.inventory_2_outlined,
+          label: '當前',
+          value: server.currentVersion ?? '未追蹤',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _InfoRow(
+          icon: Icons.cloud_download_outlined,
+          label: '最新',
+          value: result.latestVersion ?? '未知',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _StatusBanner(
+          icon: result.updateAvailable
+              ? Icons.system_update_alt
+              : Icons.check_circle_outline,
+          text: result.updateAvailable ? '有新版本可更新' : '已是最新版',
+          color: latestColor,
         ),
         if (result.updateAvailable) ...[
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: onUpdate,
-            icon: const Icon(Icons.system_update_alt, size: 18),
-            label: Text('更新至 ${result.latestVersion}'),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onUpdate,
+              icon: const Icon(Icons.system_update_alt, size: 18),
+              label: Text('更新至 ${result.latestVersion}'),
+            ),
           ),
         ],
       ],
+    );
+  }
+}
+
+class _StatusBanner extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  const _StatusBanner({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: color, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -431,16 +573,21 @@ class _MaskedKeyValueListState extends State<_MaskedKeyValueList> {
         final isRevealed = _revealed.contains(e.key);
         return ListTile(
           dense: true,
-          contentPadding: EdgeInsets.zero,
+          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.md),
+          ),
+          tileColor: Theme.of(context).colorScheme.surfaceContainerLow,
           title: Text(e.key, style: const TextStyle(fontFamily: 'monospace')),
           subtitle: Text(
             e.value.isEmpty
                 ? '(empty)'
                 : isRevealed
-                    ? e.value
-                    : '••••••',
+                ? e.value
+                : '••••••',
             style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -451,7 +598,7 @@ class _MaskedKeyValueListState extends State<_MaskedKeyValueList> {
                     isRevealed ? Icons.visibility_off : Icons.visibility,
                     size: 16,
                   ),
-                  tooltip: isRevealed ? 'Hide' : 'Show',
+                  tooltip: isRevealed ? '隱藏' : '顯示',
                   onPressed: () => setState(() {
                     if (isRevealed) {
                       _revealed.remove(e.key);
@@ -462,12 +609,12 @@ class _MaskedKeyValueListState extends State<_MaskedKeyValueList> {
                 ),
               IconButton(
                 icon: const Icon(Icons.copy, size: 16),
-                tooltip: 'Copy value',
+                tooltip: '複製值',
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: e.value));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('已複製 ${e.key}')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('已複製 ${e.key}')));
                 },
               ),
             ],
@@ -480,27 +627,47 @@ class _MaskedKeyValueListState extends State<_MaskedKeyValueList> {
 
 class _Section extends StatelessWidget {
   final String title;
+  final IconData icon;
   final Widget child;
 
-  const _Section({required this.title, required this.child});
+  const _Section({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title.toUpperCase(),
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  letterSpacing: 1.2,
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(AppRadii.sm),
+                  ),
+                  child: Icon(icon, size: 18, color: cs.primary),
                 ),
-          ),
-          const SizedBox(height: 6),
-          child,
-        ],
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -517,7 +684,8 @@ class _MonoText extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -537,14 +705,110 @@ class _Badge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
-      child: Text(label,
-          style: TextStyle(
-              color: Theme.of(context).colorScheme.onSecondaryContainer)),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSecondaryContainer,
+        ),
+      ),
+    );
+  }
+}
+
+class _DisabledBanner extends StatelessWidget {
+  final McpServer server;
+
+  const _DisabledBanner({required this.server});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: cs.errorContainer,
+          borderRadius: BorderRadius.circular(AppRadii.lg),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.block, color: cs.onErrorContainer),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                '${server.name} 已停用（disabled: true）',
+                style: TextStyle(
+                  color: cs.onErrorContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: cs.primary),
+          const SizedBox(width: AppSpacing.sm),
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(color: cs.onSurfaceVariant),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubsectionLabel extends StatelessWidget {
+  final String text;
+
+  const _SubsectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Text(text, style: Theme.of(context).textTheme.labelLarge),
     );
   }
 }

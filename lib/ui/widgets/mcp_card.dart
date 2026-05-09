@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/design_tokens.dart';
 import '../../models/mcp_server.dart';
 import '../../models/mcp_type.dart';
 import '../../models/ai_client.dart';
@@ -20,99 +21,117 @@ class McpCard extends ConsumerWidget {
         ? null
         : ref.watch(versionCheckProvider(server));
 
+    final cs = Theme.of(context).colorScheme;
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => McpDetailScreen(server: server),
-            ),
+            MaterialPageRoute(builder: (_) => McpDetailScreen(server: server)),
           );
         },
         child: Opacity(
           opacity: server.disabled ? 0.5 : 1.0,
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _TypeIcon(type: server.type),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _TypeIcon(type: server.type),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              server.name,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          if (server.disabled)
-                            _DisabledBadge()
-                          else if (versionAsync != null)
-                            versionAsync.when(
-                              data: (result) {
-                                // Show quick-update button when update available
-                                if (result.updateAvailable &&
-                                    result.latestVersion != null) {
-                                  return _QuickUpdateButton(
-                                    server: server,
-                                    latestVersion: result.latestVersion!,
-                                  );
-                                }
-                                return UpdateIndicator(
-                                  snapshot: AsyncSnapshot.withData(
-                                    ConnectionState.done,
-                                    result,
-                                  ),
-                                );
-                              },
-                              loading: () => UpdateIndicator(
-                                snapshot: const AsyncSnapshot.waiting(),
-                              ),
-                              error: (e, _) => UpdateIndicator(
-                                snapshot: AsyncSnapshot.withError(
-                                  ConnectionState.done,
-                                  e,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  server.name,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: AppSpacing.sm),
+                              if (server.disabled)
+                                const _DisabledBadge()
+                              else if (versionAsync != null)
+                                versionAsync.when(
+                                  data: (result) {
+                                    if (result.updateAvailable &&
+                                        result.latestVersion != null) {
+                                      return _QuickUpdateButton(
+                                        server: server,
+                                        latestVersion: result.latestVersion!,
+                                      );
+                                    }
+                                    return UpdateIndicator(
+                                      snapshot: AsyncSnapshot.withData(
+                                        ConnectionState.done,
+                                        result,
+                                      ),
+                                    );
+                                  },
+                                  loading: () => UpdateIndicator(
+                                    snapshot: const AsyncSnapshot.waiting(),
+                                  ),
+                                  error: (e, _) => UpdateIndicator(
+                                    snapshot: AsyncSnapshot.withError(
+                                      ConnectionState.done,
+                                      e,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            server.type == McpType.sse
+                                ? server.url ?? '(no URL)'
+                                : '${server.command} ${server.args.join(' ')}'
+                                      .trim(),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  fontFamily: 'monospace',
+                                  color: cs.onSurfaceVariant,
+                                ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        server.type == McpType.sse
-                            ? server.url ?? '(no URL)'
-                            : '${server.command} ${server.args.join(' ')}'.trim(),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontFamily: 'monospace',
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _TypeBadge(type: server.type),
+                    if (server.currentVersion != null)
+                      _VersionBadge(version: server.currentVersion!),
+                    ...server.clients.map((c) => _ClientBadge(client: c)),
+                    if (server.alwaysAllow.isNotEmpty)
+                      _MetaBadge(
+                        icon: Icons.verified_user_outlined,
+                        label: '${server.alwaysAllow.length} 個自動核准',
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _TypeBadge(type: server.type),
-                          const SizedBox(width: 8),
-                          if (server.currentVersion != null)
-                            _VersionBadge(version: server.currentVersion!),
-                          const Spacer(),
-                          ..._clientBadges(context, server.clients),
-                        ],
+                    if (server.env.isNotEmpty || server.headers.isNotEmpty)
+                      _MetaBadge(
+                        icon: Icons.key_outlined,
+                        label:
+                            '${server.env.length + server.headers.length} 個敏感值',
                       ),
-                    ],
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -121,19 +140,74 @@ class McpCard extends ConsumerWidget {
       ),
     );
   }
+}
 
-  List<Widget> _clientBadges(
-      BuildContext context, List<AiClientType> clients) {
-    return clients.map((c) {
-      return Tooltip(
-        message: c.displayName,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: Icon(c.icon, size: 18,
-              color: Theme.of(context).colorScheme.onSurfaceVariant),
+class _ClientBadge extends StatelessWidget {
+  final AiClientType client;
+
+  const _ClientBadge({required this.client});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: client.displayName,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
         ),
-      );
-    }).toList();
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          border: Border.all(color: cs.outlineVariant),
+          borderRadius: BorderRadius.circular(AppRadii.sm),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(client.icon, size: 15, color: cs.onSurfaceVariant),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              client.displayName,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetaBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MetaBadge({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: cs.onSurfaceVariant),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -152,10 +226,11 @@ class _QuickUpdateButton extends ConsumerWidget {
         style: TextButton.styleFrom(
           backgroundColor: Theme.of(context).colorScheme.errorContainer,
           foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          minimumSize: const Size(44, 36),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+          ),
         ),
         onPressed: () => showUpdateDialog(context, ref, server, latestVersion),
         icon: const Icon(Icons.system_update_alt, size: 16),
@@ -168,15 +243,16 @@ class _QuickUpdateButton extends ConsumerWidget {
   }
 }
 
-
 class _DisabledBadge extends StatelessWidget {
+  const _DisabledBadge();
+
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: Text(
         '停用',
@@ -222,8 +298,8 @@ class _TypeIcon extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(AppRadii.md),
       ),
       child: Icon(icon, color: color, size: 22),
     );
@@ -237,10 +313,13 @@ class _TypeBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: Text(
         type.label,
@@ -260,10 +339,13 @@ class _VersionBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: Text(
         'v$version',

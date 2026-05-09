@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/design_tokens.dart';
 import '../../models/version_check_result.dart';
 
 class UpdateIndicator extends StatelessWidget {
@@ -9,11 +10,24 @@ class UpdateIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     if (snapshot.connectionState == ConnectionState.waiting) {
-      return const SizedBox(
-        width: 16,
-        height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2),
+      return Tooltip(
+        message: '正在檢查版本',
+        child: Container(
+          width: 30,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+          ),
+          child: const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
       );
     }
 
@@ -21,14 +35,22 @@ class UpdateIndicator extends StatelessWidget {
     if (result == null || result.hasError) {
       return Tooltip(
         message: result?.errorMessage ?? '檢查失敗',
-        child: const Icon(Icons.error_outline, size: 18, color: Colors.grey),
+        child: _IndicatorPill(
+          icon: Icons.error_outline,
+          color: cs.onSurfaceVariant,
+          background: cs.surfaceContainerHigh,
+        ),
       );
     }
 
     if (result.isUntracked) {
-      return const Tooltip(
+      return Tooltip(
         message: '版本未追蹤',
-        child: Icon(Icons.help_outline, size: 18, color: Colors.grey),
+        child: _IndicatorPill(
+          icon: Icons.help_outline,
+          color: cs.onSurfaceVariant,
+          background: cs.surfaceContainerHigh,
+        ),
       );
     }
 
@@ -36,17 +58,20 @@ class UpdateIndicator extends StatelessWidget {
       return Tooltip(
         message: '可更新至 ${result.latestVersion}',
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.error,
-            borderRadius: BorderRadius.circular(8),
+            color: cs.errorContainer,
+            borderRadius: BorderRadius.circular(AppRadii.sm),
           ),
           child: Text(
             '↑ ${result.latestVersion}',
             style: TextStyle(
               fontSize: 13,
-              color: Theme.of(context).colorScheme.onError,
-              fontWeight: FontWeight.w600,
+              color: cs.onErrorContainer,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -55,7 +80,37 @@ class UpdateIndicator extends StatelessWidget {
 
     return Tooltip(
       message: '已是最新版 (${result.latestVersion})',
-      child: const Icon(Icons.check_circle_outline, size: 18, color: Colors.green),
+      child: _IndicatorPill(
+        icon: Icons.check_circle_outline,
+        color: AppSemanticColors.success,
+        background: AppSemanticColors.success.withValues(alpha: 0.12),
+      ),
+    );
+  }
+}
+
+class _IndicatorPill extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final Color background;
+
+  const _IndicatorPill({
+    required this.icon,
+    required this.color,
+    required this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+      ),
+      child: Icon(icon, size: 18, color: color),
     );
   }
 }
